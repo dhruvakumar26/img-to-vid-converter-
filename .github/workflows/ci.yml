@@ -1,0 +1,55 @@
+name: Build frontend and backend artifacts
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-frontend:
+    name: Build React frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 18
+
+      - name: Install dependencies and build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Zip frontend build
+        run: |
+          cd frontend
+          zip -r img2vid-frontend-build.zip build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: img2vid-frontend-build
+          path: frontend/img2vid-frontend-build.zip
+
+  build-backend:
+    name: Package backend application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Zip backend source
+        run: |
+          cd backend
+          zip -r ../img2vid-backend.zip .
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: img2vid-backend
+          path: img2vid-backend.zip
