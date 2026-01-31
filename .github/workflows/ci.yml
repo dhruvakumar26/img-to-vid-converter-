@@ -168,7 +168,7 @@ jobs:
         run: |
           tar -czf frontend-package.tar.gz \
            deploytmp/img2vid-frontend-build.zip \
-           deploy/nginx.conf
+           deploy/ngnix.conf
           
           B64=$(base64 -w 0 frontend-package.tar.gz)
           az vm run-command invoke \
@@ -200,8 +200,8 @@ jobs:
              sudo rm -rf /var/www/html/*
              sudo unzip -q /tmp/frontend/img2vid-frontend-build.zip -d /var/www/html/
 
-             sudo cp /tmp/frontend/deploy/nginx.conf /etc/nginx/sites-available/default
-             sudo ngninx -t
+             sudo cp /tmp/frontend/deploy/ngnix.conf /etc/nginx/sites-available/default
+             sudo nginx -t
              sudo systemctl restart nginx
             "
 
