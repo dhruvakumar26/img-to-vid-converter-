@@ -53,3 +53,159 @@ jobs:
         with:
           name: img2vid-backend
           path: img2vid-backend.zip
+  
+  deploy-backend:
+    name: Deploy backend to VM
+    runs-on: ubuntu-latest
+    needs: build-backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-build
+          path: ./deploytmp
+      
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          #client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          #tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          #subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          #client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+      
+      - name: Upload backend artifact and service deployment script preparation
+        env:
+          RG: ${{ secrets.BACKEND_VM_RG }}
+          VM: ${{ secrets.BACKEND_VM_NAME }}
+        run: |
+          tar -czf backend-package.tar.gz \
+           deploytmp/img2vid-backend.zip \
+           deploy/imgvid-backend.service
+          
+          B64=$(base64 -w 0 backend-package.tar.gz)
+          az vm run-command invoke \
+            --resource-group "$RG" \
+            --name "$VM" \
+            --command-id 'RunShellScript' \
+            --scripts "
+              mkdir -p /tmp/backend &&
+              echo '$B64' | base64 -d > /tmp/backend/backend-package.tar.gz &&
+              tar -xzf /tmp/backend/backend-package.tar.gz -C /tmp/backend
+              " 
+      
+      - name: Install Flask and systemd service on VM
+        env:
+         RG: ${{ secrets.BACKEND_VM_RG }}
+         VM: ${{ secrets.BACKEND_VM_NAME }}
+        run: |
+         az vm run-command invoke \
+           --resource-group "$RG" \
+           --name "$VM" \
+           --command-id 'RunShellScript' \
+           --scripts "
+             set -e
+             
+             echo \"Installing python3 and pip...\"
+             sudo apt update -y
+             sudo apt install -y python3 python3-venv python3-pip unzip
+             
+             TIMESTAMP=\$(date +%Y%m%d%H%M%S)
+             RELEASE=/opt/img2vid_backend/releases/$TIMESTAMP
+             sudo mkdir -p \$RELEASE
+             
+             sudo unzip -q /tmp/backend/img2vid-backend.zip -d \$RELEASE
+             sudo ln -sfn \$RELEASE /opt/img2vid_backend/current
+
+             if [ ! -d /opt/img2vid_backend/venv ]; then
+               echo \"Creating virtual environment...\"
+               sudo python3 -m venv /opt/img2vid_backend/venv
+             fi
+
+             source /opt/img2vid_backend/venv/bin/activate
+             echo \"Installing backend dependencies...\"
+             pip install -r /opt/img2vid_backend/current/requirements.txt
+             pip install --upgrade flask gunicorn
+
+             sudo cp /tmp/backend/deploy/imgvid-backend.service /etc/systemd/system/imgvid-backend.service
+             sudo systemctl daemon-reload
+             sudo systemctl enable imgvid-backend
+             sudo systemctl restart imgvid-backend
+            "
+
+  deploy-frontend:
+    name: Deploy frontend to Azure Static Web App
+    runs-on: ubuntu-latest
+    needs: [build-frontend, deploy-backend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: ./deploytmp
+      
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          #client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          #tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          #subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          #client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+      
+      - name: Upload React build and ngnix config
+        env:
+          RG: ${{ secrets.FRONTEND_VM_RG }}
+          VM: ${{ secrets.FRONTEND_VM_NAME }}
+        run: |
+          tar -czf frontend-package.tar.gz \
+           deploytmp/img2vid-frontend-build.zip \
+           deploy/nginx.conf
+          
+          B64=$(base64 -w 0 frontend-package.tar.gz)
+          az vm run-command invoke \
+            --resource-group "$RG" \
+            --name "$VM" \
+            --command-id 'RunShellScript' \
+            --scripts "
+              mkdir -p /tmp/frontend &&
+              echo '$B64' | base64 -d > /tmp/frontend/frontend-package.tar.gz &&
+              tar -xzf /tmp/frontend/frontend-package.tar.gz -C /tmp/frontend
+              "
+      
+      - name: Install Nginx and deploy frontend on VM
+        env:
+         RG: ${{ secrets.FRONTEND_VM_RG }}
+         VM: ${{ secrets.FRONTEND_VM_NAME }}
+        run: |
+         az vm run-command invoke \
+           --resource-group "$RG" \
+           --name "$VM" \
+           --command-id 'RunShellScript' \
+           --scripts "
+             set -e
+
+             echo \"Installing Nginx...\"
+             sudo apt update -y
+             sudo apt install -y nginx unzip
+             
+             sudo rm -rf /var/www/html/*
+             sudo unzip -q /tmp/frontend/img2vid-frontend-build.zip -d /var/www/html/
+
+             sudo cp /tmp/frontend/deploy/nginx.conf /etc/nginx/sites-available/default
+             sudo ngninx -t
+             sudo systemctl restart nginx
+            "
+
+      
+  
+      
+      
