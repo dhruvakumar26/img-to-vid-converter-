@@ -32,7 +32,7 @@ jobs:
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
         with:
-          name: img2vid-frontend-build
+          name: frontend-build
           path: frontend/img2vid-frontend-build.zip
 
   build-backend:
@@ -51,7 +51,7 @@ jobs:
       - name: Upload backend artifact
         uses: actions/upload-artifact@v4
         with:
-          name: img2vid-backend
+          name: backend-build
           path: img2vid-backend.zip
   
   deploy-backend:
