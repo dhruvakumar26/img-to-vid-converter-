@@ -4,6 +4,11 @@ on:
   push:
     branches: [ main ]
 
+env:
+  AZURE_WEBAPP_BACKEND: 'backendapp'
+  AZURE_WEBAPP_FRONTEND: 'imgtovideoconv'
+  AZURE_RG: 'webserver-group'
+
 jobs:
   deploy-backend:
     name: Deploy Flask backend to Azure app service
@@ -16,6 +21,13 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Ensure App servie build settings and startup command
+        uses: azure/cli@v1
+        with:
+          inlineScript: |
+            az webapp config appsettings set --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }} --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
+            az webapp config set --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }} --startup-file "gunicorn app:app --bind 0.0.0.0:8000"
           
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -36,7 +48,7 @@ jobs:
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'backendapp'
+          app-name: ${{ env.AZURE_WEBAPP_BACKEND }}
           package: 'img2vid-backend.zip'
   
   deploy-frontend:
@@ -66,5 +78,5 @@ jobs:
       - name: deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'imgtovideoconv'
+          app-name: ${{ env.AZURE_WEBAPP_FRONTEND }}
           package: 'frontend/build'
