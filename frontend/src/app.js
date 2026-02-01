@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import axios from "axios";
 
+const API_URL = process.env.REACT_APP_API_URL || "";
+//const API_URL = "https://backendapp.azurewebsites.net";
+
 function App() {
   const [images, setImages] = useState([]);
   const [audio, setAudio] = useState(null);
@@ -31,13 +34,14 @@ function App() {
     if (audio) fd.append("audio", audio);
     setStatus("Uploading...");
     try {
-      const resp = await axios.post("/api/convert", fd, {
+      const resp = await axios.post(`${API_URL}/api/convert`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const jobId = resp.data.job_id;
       setStatus("Processing...");
       pollStatus(jobId);
     } catch (e) {
+      console.error(e);
       setStatus("Upload failed");
     }
   }
@@ -45,11 +49,11 @@ function App() {
   async function pollStatus(id) {
     const interval = setInterval(async () => {
       try {
-        const r = await axios.get(`/api/status/${id}`);
+        const r = await axios.get(`${API_URL}/api/status/${id}`);
         setStatus(r.data.status);
         if (r.data.status === "done") {
           clearInterval(interval);
-          setResultUrl(`/api/download/${id}`);
+          setResultUrl(`${API_URL}/api/download/${id}`);
         } else if (r.data.status === "error") {
           clearInterval(interval);
         }
