@@ -49,7 +49,7 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_BACKEND }}
-          package: 'img2vid-backend.zip'
+          package: img2vid-backend.zip
   
   deploy-frontend:
     name: Deploy React frontend to Azure app service
@@ -79,4 +79,4 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_FRONTEND }}
-          package: 'frontend/build'
+          package: frontend/build
