@@ -13,6 +13,7 @@ CONV_DIR.mkdir(exist_ok=True)
 app = Flask(__name__)
 jobs = {}  # job_id -> {status, out_path, error}
 
+
 def run_conversion(job_id, image_paths, audio_path):
     try:
         workdir = Path(CONV_DIR / job_id)
@@ -150,6 +151,14 @@ def run_conversion1(job_id, image_paths, audio_path):
         jobs[job_id]["status"] = "error"
         jobs[job_id]["error"] = f"error: {e}; traceback: {tb}"
         print(f"[{job_id}] conversion error: {e}\n{tb}")
+
+@app.route("/")
+def home():
+    return "backend is running", 200
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
 
 @app.route("/api/convert", methods=["POST"])
 def convert():
