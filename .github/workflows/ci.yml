@@ -70,10 +70,11 @@ jobs:
           node-version: 22
 
       - name: Install dependencies and build react frontend app
-        working-directory: frontend
         run: |
+          cd frontend
           npm install
           npm run build
+          ls -la build | head
 
       - name: deploy to Azure Web App
         uses: azure/webapps-deploy@v3
