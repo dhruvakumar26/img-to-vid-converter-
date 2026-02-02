@@ -10,9 +10,10 @@ from flask_cors import CORS
 APP_DIR = Path(__file__).parent
 CONV_DIR = APP_DIR / "conversions"
 CONV_DIR.mkdir(exist_ok=True)
-
+FRONTEND_URL = "https://frontendapp-hzcxbcbte7cta5eq.polandcentral-01.azurewebsites.net"
 app = Flask(__name__)
-CORS(app, origins="*")
+CORS(app, resources={r"/api/*": {"origins": FRONTEND_URL}}, 
+        supports_credentials=True, allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"])
 jobs = {}  # job_id -> {status, out_path, error}
 
 
