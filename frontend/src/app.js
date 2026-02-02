@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-const API_URL = process.env.REACT_APP_API_URL || "backendapp-excfgcb6d7ghcjf7.polandcentral-01.azurewebsites.net";
+const API_URL = process.env.REACT_APP_API_URL || "https://backendapp-excfgcb6d7ghcjf7.polandcentral-01.azurewebsites.net";
 //if (!API_URL) {
 //  throw new Error("Missing REACT_APP_API_URL");
 //}
@@ -40,7 +40,12 @@ function App() {
       const resp = await axios.post(`${API_URL}/api/convert`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      console.log("Convert response:", resp.data);
       const jobId = resp.data.job_id;
+      if (!jobId) {
+        setStatus("Backend did not return job_id");
+        return;
+      }
       setStatus("Processing...");
       pollStatus(jobId);
     } catch (e) {
