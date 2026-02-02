@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-const API_URL = process.env.REACT_APP_API_URL;
-if (!API_URL) {
-  throw new Error("Missing REACT_APP_API_URL");
-}
+const API_URL = process.env.REACT_APP_API_URL || "backendapp-excfgcb6d7ghcjf7.polandcentral-01.azurewebsites.net";
+//if (!API_URL) {
+//  throw new Error("Missing REACT_APP_API_URL");
+//}
 //const API_URL = "backendapp-excfgcb6d7ghcjf7.polandcentral-01.azurewebsites.net";
 
 function App() {
