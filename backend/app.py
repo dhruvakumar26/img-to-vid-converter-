@@ -5,14 +5,14 @@ import traceback
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from threading import Thread
 from pathlib import Path
-#from flask_cors import CORS
+from flask_cors import CORS
 
 APP_DIR = Path(__file__).parent
 CONV_DIR = APP_DIR / "conversions"
 CONV_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__)
-#CORS(app, origins="frontendapp-hzcxbcbte7cta5eq.polandcentral-01.azurewebsites.net")
+CORS(app, origins="*")
 jobs = {}  # job_id -> {status, out_path, error}
 
 
