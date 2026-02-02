@@ -6,8 +6,8 @@ on:
 
 env:
   AZURE_WEBAPP_BACKEND: 'backendapp'
-  AZURE_WEBAPP_FRONTEND: 'imgtovideoconv'
-  AZURE_RG: 'webserver-group'
+  AZURE_WEBAPP_FRONTEND: 'frontendapp'
+  AZURE_RG: 'imgtovidconvapp'
 
 jobs:
   deploy-backend:
