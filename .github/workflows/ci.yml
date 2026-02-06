@@ -13,6 +13,10 @@ jobs:
   deploy-backend:
     name: Deploy Flask backend to Azure app service
     runs-on: ubuntu-latest
+    env:
+      ACR_NAME: 'backendAppContainer'
+      ACR_IMAGE: 'backendappimage'
+      IMAGE_TAG: ${{ github.sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -22,34 +26,52 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
       
+      - name: Get ACR login server
+        id: acrinfo
+        uses: azure/cli@v1
+        with:
+          inlineScript: |
+            ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --resource-group $AZURE_RG --query loginServer --output tsv)
+            echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> $GITHUB_ENV
+            echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER"
+      
+      - name: Login to ACR
+        uses: azure/cli@v1
+        with:
+          inlineScript: |
+            az acr login --name $ACR_NAME
+
+      - name: Build and push backend docker image to ACR
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ env.ACR_LOGIN_SERVER }}/${{ env.ACR_IMAGE }}:${{ env.IMAGE_TAG }}
+      
+      - name: Configure Azure Web App to use ACR image
+        uses: azure/cli@v1
+        with:
+          inlineScript: |
+            az webapp config container set \
+            --name ${{ env.AZURE_WEBAPP_BACKEND }} \
+            --resource-group ${{ env.AZURE_RG }} \
+            --docker-custom-image-name ${{ env.ACR_LOGIN_SERVER }}/${{ env.ACR_IMAGE }}:${{ env.IMAGE_TAG }} \
+            --docker-registry-server-url https://${{ env.ACR_LOGIN_SERVER }}
+
       - name: Ensure App servie build settings and startup command
         uses: azure/cli@v1
         with:
           inlineScript: |
-            az webapp config appsettings set --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }} --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
-            az webapp config set --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }} --startup-file "gunicorn app:app --bind 0.0.0.0:8000"
+            az webapp config appsettings set --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }} --settings \
+              FRONTEND_ORIGINS=${{ secrets.FRONTEND_ORIGINS }} \
+              WEBSITES_PORT=8000
           
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Restart Azure Web App
+        uses: azure/cli@v1
         with:
-          python-version: '3.14'
-
-      - name: Install dependencies
-        working-directory: backend
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      
-      - name: Zip backend source
-        run: |
-          cd backend
-          zip -r ../img2vid-backend.zip .
-
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_BACKEND }}
-          package: img2vid-backend.zip
+          inlineScript: |
+            az webapp restart --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }}
   
   deploy-frontend:
     name: Deploy React frontend to Azure app service
@@ -72,6 +94,7 @@ jobs:
       - name: Install dependencies and build react frontend app
         run: |
           cd frontend
+          echo "REACT_APP_API_URL=https://backendapp-excfgcb6d7ghcjf7.polandcentral-01.azurewebsites.net" > .env.production
           npm install
           npm run build
           ls -la build | head
