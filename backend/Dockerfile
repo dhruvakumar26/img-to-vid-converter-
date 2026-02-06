@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.12-slim
  
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg build-essential && \
@@ -14,4 +14,4 @@ COPY . /app
 ENV PORT=8080
 EXPOSE ${PORT}
 
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:${PORT}", "--workers", "2", "--threads", "4", "--timeout", "300"]   
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:${PORT}", "--workers", "1", "--threads", "4", "--timeout", "300"]   
