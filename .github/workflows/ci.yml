@@ -5,13 +5,12 @@ on:
     branches: [ main ]
 
 env:
-  AZURE_WEBAPP_BACKEND: 'backend-container'
+  AZURE_WEBAPP_BACKEND: 'backendapp'
   AZURE_WEBAPP_FRONTEND: 'frontendapp'
   AZURE_RG: 'imgtovidconvapp'
   ACR_NAME: 'backendAppContainer'
-  ACR_IMAGE: 'backendapp'
-  IMAGE_TAG: 'latest'
-  ACR_LOGIN_SERVER: 'backendappcontainer.azurecr.io'
+  IMAGE_NAME: 'backendapp-image'
+  DOCKER_TAG: 'latest'
 
 jobs:
   deploy-backend:
@@ -26,37 +25,34 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Build and push backend docker image to ACR
-        uses: azure/cli@v1
-        with:
-          inlineScript: |
-            az acr build --registry $ACR_NAME \
-            --image $ACR_IMAGE:${IMAGE_TAG} \
-            ./backend
       
-      - name: Configure Azure Web App to use ACR image
-        uses: azure/cli@v1
-        with:
-          inlineScript: |
-            az webapp config container set \
+      - name: Set ACR login server env variable
+        id: acr
+        run: |
+          echo "ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --query loginServer --output tsv)" >> $GITHUB_ENV
+     
+      - name: Login to ACR
+        run: |
+            az acr login --name $ACR_NAME
+        
+      - name: Build docker image
+        run: |
+          docker build -t $ACR_LOGIN_SERVER/$IMAGE_NAME:$DOCKER_TAG ./backend
+ 
+      - name: Push docker image to ACR
+        run: |
+          docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:$DOCKER_TAG
+
+      - name: Deploy Docker image to Azure Web App
+        run: |
+          az webapp config container set \
             --name ${{ env.AZURE_WEBAPP_BACKEND }} \
             --resource-group ${{ env.AZURE_RG }} \
-            --docker-custom-image-name ${{ env.ACR_LOGIN_SERVER }}/${{ env.ACR_IMAGE }}:${{ env.IMAGE_TAG }} \
-            --docker-registry-server-url https://${{ env.ACR_LOGIN_SERVER }}
-
-      - name: Ensure App servie build settings and startup command
-        uses: azure/cli@v1
-        with:
-          inlineScript: |
-            az webapp config appsettings set --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }} --settings \
-              WEBSITES_PORT=8000 \
-              PYTHONUNBUFFERED=1
+            --docker-custom-image-name $ACR_LOGIN_SERVER/$IMAGE_NAME:$DOCKER_TAG \
+            --docker-registry-server-url https://$ACR_LOGIN_SERVER
           
       - name: Restart Azure Web App
-        uses: azure/cli@v1
-        with:
-          inlineScript: |
+        run: |
             az webapp restart --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }}
   
   deploy-frontend:
