@@ -5,18 +5,19 @@ on:
     branches: [ main ]
 
 env:
-  AZURE_WEBAPP_BACKEND: 'backendapp'
+  AZURE_WEBAPP_BACKEND: 'backend-container'
   AZURE_WEBAPP_FRONTEND: 'frontendapp'
   AZURE_RG: 'imgtovidconvapp'
+  ACR_NAME: 'backendAppContainer'
+  ACR_IMAGE: 'backendapp'
+  IMAGE_TAG: 'latest'
+  ACR_LOGIN_SERVER: 'backendappcontainer.azurecr.io'
 
 jobs:
   deploy-backend:
-    name: Deploy Flask backend to Azure app service
+    name: Build and deploy backend container
     runs-on: ubuntu-latest
-    env:
-      ACR_NAME: 'backendAppContainer'
-      ACR_IMAGE: 'backendappimage'
-      IMAGE_TAG: ${{ github.sha }}
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -25,29 +26,14 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
-      - name: Get ACR login server
-        id: acrinfo
-        uses: azure/cli@v1
-        with:
-          inlineScript: |
-            ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --resource-group $AZURE_RG --query loginServer --output tsv)
-            echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> $GITHUB_ENV
-            echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER"
-      
-      - name: Login to ACR
-        uses: azure/cli@v1
-        with:
-          inlineScript: |
-            az acr login --name $ACR_NAME
 
       - name: Build and push backend docker image to ACR
-        uses: docker/build-push-action@v4
+        uses: azure/cli@v1
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: ${{ env.ACR_LOGIN_SERVER }}/${{ env.ACR_IMAGE }}:${{ env.IMAGE_TAG }}
+          inlineScript: |
+            az acr build --registry $ACR_NAME \
+            --image $ACR_IMAGE:${IMAGE_TAG} \
+            ./backend
       
       - name: Configure Azure Web App to use ACR image
         uses: azure/cli@v1
@@ -64,8 +50,8 @@ jobs:
         with:
           inlineScript: |
             az webapp config appsettings set --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }} --settings \
-              FRONTEND_ORIGINS=${{ secrets.FRONTEND_ORIGINS }} \
-              WEBSITES_PORT=8000
+              WEBSITES_PORT=8000 \
+              PYTHONUNBUFFERED=1
           
       - name: Restart Azure Web App
         uses: azure/cli@v1
