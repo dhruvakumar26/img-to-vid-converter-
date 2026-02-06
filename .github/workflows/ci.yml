@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 env:
-  AZURE_WEBAPP_BACKEND: 'backendapp'
+  AZURE_WEBAPP_BACKEND: 'backend-container'
   AZURE_WEBAPP_FRONTEND: 'frontendapp'
   AZURE_RG: 'imgtovidconvapp'
   ACR_NAME: 'backendAppContainer'
