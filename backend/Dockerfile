@@ -1,17 +1,17 @@
-FROM python 3.14-slim AS base
+FROM python:3.14-slim
  
 RUN apt-get update && \
-    apt-get install -y ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY . .
+COPY . /app
 
 ENV PORT=8000
-EXPOSE 8000
+EXPOSE ${PORT}
 
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "300"]   
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:${PORT}}", "--workers", "2", "--threads", "4", "--timeout", "300"]   
