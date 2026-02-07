@@ -1,15 +1,18 @@
 import os
 import uuid
+import json
 import subprocess
 import traceback
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_file
 from threading import Thread
 from pathlib import Path
 from flask_cors import CORS
+import tempfile
+from azure.storage.blob import BlobServiceClient
 
-APP_DIR = Path(__file__).parent
-CONV_DIR = APP_DIR / "conversions"
-CONV_DIR.mkdir(exist_ok=True)
+#APP_DIR = Path(__file__).parent
+#CONV_DIR = APP_DIR / "conversions"
+#CONV_DIR.mkdir(exist_ok=True)
 app = Flask(__name__)
 
 #FRONTEND_URL = "https://frontendapp-hzcxbcbte7cta5eq.polandcentral-01.azurewebsites.net"
@@ -25,11 +28,162 @@ CORS(
     methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 )
+
+AZURE_STORAGE_CONNECTION_STRING = os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
+BLOB_CONTAINER = "JOBS"
+blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+container_client = blob_service_client.get_container_client(BLOB_CONTAINER)
+
 #CORS(app, resources={r"/api/*": {"origins": FRONTEND_URL}}, 
 #        supports_credentials=True, allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"])
 jobs = {}  # job_id -> {status, out_path, error}
 
+def upload_blob(job_id, blob_name, file_path):
+    full_blob_name = f"{job_id}/{blob_name}"
+    with open(file_path, "rb") as data:
+        container_client.upload_blob(full_blob_name, data, overwrite=True)
+    return full_blob_name
 
+def download_blob_to_temp(blob_name):
+    temp_file = tempfile.NamedTemporaryFile(delete=False)
+    blob_client = container_client.get_blob_client(blob_name)
+    download_stream = blob_client.download_blob()
+    temp_file.write(download_stream.readall())
+    temp_file.close()
+    return temp_file.name
+
+def save_job_status(job_id, status, error=None, output_blob=None):
+    jobs[job_id] = {
+        "status": status,
+        "error": error,
+        "blob_output": output_blob
+    }
+
+def run_conversion(job_id, image_blobs, audio_blob):
+    try:
+        with tempfile.TemporaryDirectory() as workdir:
+            image_paths = []
+            for idx, blob_name in enumerate(image_blobs, start=1):
+                local_path = download_blob_to_temp(blob_name)
+                dst = os.path.join(workdir, f"img{idx:03d}.jpg")
+                subprocess.run(["ffmpeg", "-y", "-i", local_path, dst], check=True)
+                image_paths.append(dst)
+            
+            audio_path = None
+            if audio_blob:
+                audio_path = download_blob_to_temp(audio_blob)
+            
+            temp_video = os.path.join(workdir, "temp_video.mp4")
+            vf_chain = (
+                "scale=1920:1080:force_original_aspect_ratio=decrease,"
+                "pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
+            )
+            subprocess.run([
+                "ffmpeg", "-y",
+                "-framerate", "1",
+                "-i", os.path.join(workdir, "img%03d.jpg"),
+                "-vf", vf_chain,
+                "-c:v", "libx264",
+                "-r", "30",
+                "-pix_fmt", "yuv420p",
+                temp_video
+            ], check=True)
+
+            final_out = os.path.join(workdir, "output.mp4")
+            if audio_path:
+                subprocess.run([
+                    "ffmpeg", "-y",
+                    "-i", temp_video,
+                    "-i", audio_path,
+                    "-c:v", "copy", "-c:a", "aac", "-shortest",
+                    final_out
+                ], check=True)
+            else:
+                os.replace(temp_video, final_out)
+            
+            output_blob = upload_blob(job_id, "output.mp4", final_out)
+            save_job_status(job_id, "done", output_blob=output_blob)
+    except subprocess.CalledProcessError as cpe:
+        tb = traceback.format_exc()
+        save_job_status(job_id, "error", error=f"ffmpeg error: {cpe}; traceback: {tb}")
+    except Exception as e:
+        tb = traceback.format_exc()
+        save_job_status(job_id, "error", error=f"error: {e}; traceback: {tb}")
+
+
+@app.route("/")
+def home():
+    return "backend is running", 200 
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+
+@app.route("/api/convert", methods=["POST"])
+def convert():
+    image_files = request.files.getlist("images")
+    audio_file = request.files.get("audio")
+
+    if not image_files:
+        return jsonify({"error": "no images uploaded"}), 400
+
+    job_id = str(uuid.uuid4())
+    save_job_status(job_id, "queued")
+    image_blobs = []
+    try:
+        for i, f in enumerate(image_files, start=1):
+            ext = os.path.splitext(f.filename)[1] if f.filename else ".jpg"
+            blob_name = f"img_{i:03d}.jpg"
+            temp_file = tempfile.NamedTemporaryFile(delete=False)
+            f.save(temp_file.name)
+            blob_name_full = upload_blob(job_id, blob_name, temp_file.name)
+            image_blobs.append(blob_name_full)
+        
+
+        audio_blob = None
+        if audio_file:
+            ext = os.path.splitext(audio_file.filename)[1] or ".mp3"
+            temp_audio = tempfile.NamedTemporaryFile(delete=False)
+            audio_file.save(temp_audio.name)
+            audio_blob = upload_blob(job_id, f"audio{ext}", temp_audio.name)
+
+    except Exception as e:
+        tb = traceback.format_exc()
+        save_job_status(job_id, "error", error=f"upload error: {e}; traceback: {tb}")
+        return jsonify({"job_id": job_id, "status": "error", "error": str(e)}), 500
+    
+    save_job_status(job_id, "processing")
+    thread = Thread(target=run_conversion, args=(job_id, image_blobs, audio_blob))
+    thread.start()
+
+    return jsonify({"job_id": job_id}), 202
+
+@app.route("/api/status/<job_id>")
+def status(job_id):
+    info = jobs.get(job_id)
+    if not info:
+        return jsonify({"status": "not_found"}), 404
+    return jsonify({"status": info.get("status"), "error": info.get("error", "")})
+
+@app.route('/api/download/<job_id>')
+def download(job_id):
+    info = jobs.get(job_id)
+    if not info or info.get('status') != 'done':
+        return jsonify({"error": "File not ready or job not found"}), 404
+    
+    output_blob = info.get('blob_output')
+    if not output_blob:
+        return jsonify({"error": "Output blob not found"}), 404
+
+    local_file = download_blob_to_temp(output_blob)
+    return send_file(
+        local_file, 
+        as_attachment=True, 
+        download_name=f"conversion_{job_id}.mp4",
+        mimetype='video/mp4'
+     )
+
+"""
 def run_conversion(job_id, image_paths, audio_path):
     try:
         workdir = Path(CONV_DIR / job_id)
@@ -265,7 +419,7 @@ def download(job_id):
         )
     except Exception as e:
         return jsonify({"error": f"Download failed: {str(e)}"}), 500
-
+"""
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
