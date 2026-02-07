@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-const API_URL = process.env.REACT_APP_API_URL || "https://backend-container-eshkbrg0gdbdh2dg.polandcentral-01.azurewebsites.net";
+// When using CORS, point to the backend App Service URL via REACT_APP_API_URL.
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
 //if (!API_URL) {
 //  throw new Error("Missing REACT_APP_API_URL");
 //}

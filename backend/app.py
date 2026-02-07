@@ -10,18 +10,20 @@ from flask_cors import CORS
 APP_DIR = Path(__file__).parent
 CONV_DIR = APP_DIR / "conversions"
 CONV_DIR.mkdir(exist_ok=True)
+app = Flask(__name__)
+
 #FRONTEND_URL = "https://frontendapp-hzcxbcbte7cta5eq.polandcentral-01.azurewebsites.net"
 FRONTEND_URL = os.environ.get(
     "FRONTEND_URL",
-    "https://frontendapp.azurewebsites.net"
+    "http://localhost:3000"
 )
-app = Flask(__name__)
+
 CORS(
     app,
     resources={r"/api/*": {"origins": FRONTEND_URL}},
     supports_credentials=False,
     methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type"]
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 )
 #CORS(app, resources={r"/api/*": {"origins": FRONTEND_URL}}, 
 #        supports_credentials=True, allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"])
