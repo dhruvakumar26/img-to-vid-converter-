@@ -30,7 +30,7 @@ CORS(
 )
 
 AZURE_STORAGE_CONNECTION_STRING = os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
-BLOB_CONTAINER = "JOBS"
+BLOB_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER_NAME", "jobs")
 blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
 container_client = blob_service_client.get_container_client(BLOB_CONTAINER)
 
