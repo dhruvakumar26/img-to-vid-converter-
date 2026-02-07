@@ -49,7 +49,6 @@ function App() {
       setStatus("Processing...");
       pollStatus(jobId);
     } catch (e) {
-      console.error(e);
       setStatus("Upload failed");
     }
   }

@@ -5,13 +5,24 @@ import traceback
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from threading import Thread
 from pathlib import Path
-#from flask_cors import CORS
+from flask_cors import CORS
 
 APP_DIR = Path(__file__).parent
 CONV_DIR = APP_DIR / "conversions"
 CONV_DIR.mkdir(exist_ok=True)
 #FRONTEND_URL = "https://frontendapp-hzcxbcbte7cta5eq.polandcentral-01.azurewebsites.net"
+FRONTEND_URL = os.environ.get(
+    "FRONTEND_URL",
+    "https://frontendapp.azurewebsites.net"
+)
 app = Flask(__name__)
+CORS(
+    app,
+    resources={r"/api/*": {"origins": FRONTEND_URL}},
+    supports_credentials=False,
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"]
+)
 #CORS(app, resources={r"/api/*": {"origins": FRONTEND_URL}}, 
 #        supports_credentials=True, allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"])
 jobs = {}  # job_id -> {status, out_path, error}
@@ -254,5 +265,5 @@ def download(job_id):
         return jsonify({"error": f"Download failed: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    #port = int(os.environ.get("PORT", 8000))
-    app.run(host='0.0.0.0', port=8080)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
