@@ -76,7 +76,7 @@ jobs:
       - name: Install dependencies and build react frontend app
         run: |
           cd frontend
-          echo "REACT_APP_API_URL=https://backendapp-excfgcb6d7ghcjf7.polandcentral-01.azurewebsites.net" > .env.production
+          echo "REACT_APP_API_URL=https://backend-container-eshkbrg0gdbdh2dg.polandcentral-01.azurewebsites.net" > .env.production
           npm install
           npm run build
           ls -la build | head
