@@ -11,6 +11,7 @@ env:
   ACR_NAME: 'backendAppContainer'
   IMAGE_NAME: 'backendapp-image'
   DOCKER_TAG: 'latest'
+  BLOB_CONTAINER_NAME: 'jobs'
 
 jobs:
   deploy-backend:
@@ -51,6 +52,29 @@ jobs:
             --docker-custom-image-name $ACR_LOGIN_SERVER/$IMAGE_NAME:$DOCKER_TAG \
             --docker-registry-server-url https://$ACR_LOGIN_SERVER
           
+      - name: Set Azure Web App app settings for blob storage connection string
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_BACKEND }}
+          app-settings-json: |
+            [
+              {
+                "name": "AZURE_STORAGE_CONNECTION_STRING",
+                "value": "${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}",
+                "slotSetting": false
+              },
+              {
+                "name": "AZURE_STORAGE_CONTAINER_NAME",
+                "value": "${{ env.BLOB_CONTAINER_NAME }}",
+                "slotSetting": false
+              },
+              {
+                "name": "FRONTEND_URL",
+                "value": "https://frontendapp-hzcxbcbte7cta5eq.polandcentral-01.azurewebsites.net",
+                "slotSetting": false
+              }
+            ]
+        
       - name: Restart Azure Web App
         run: |
             az webapp restart --name ${{ env.AZURE_WEBAPP_BACKEND }} --resource-group ${{ env.AZURE_RG }}
